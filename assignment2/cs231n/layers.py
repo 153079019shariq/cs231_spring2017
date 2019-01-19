@@ -20,12 +20,13 @@ def affine_forward(x, w, b):
     - out: output, of shape (N, M)
     - cache: (x, w, b)
     """
-    out = None
+    D_inp= x.reshape(x.shape[0],-1)
+    out = np.dot(D_inp,w) +b
     ###########################################################################
     # TODO: Implement the affine forward pass. Store the result in out. You   #
     # will need to reshape the input into rows.                               #
     ###########################################################################
-    pass
+    
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -49,11 +50,19 @@ def affine_backward(dout, cache):
     - db: Gradient with respect to b, of shape (M,)
     """
     x, w, b = cache
-    dx, dw, db = None, None, None
+    D_inp= x.reshape(x.shape[0],-1)
+    dx, dw, db = None, None, 1
     ###########################################################################
     # TODO: Implement the affine backward pass.                               #
     ###########################################################################
-    pass
+    print(x.shape,w.shape,b.shape)
+    #print(dx.shape,dw.shape,db.shape)
+    print(dout.shape)
+    dx     = np.dot(dout,w.T)
+    db     = np.sum(dout,axis=0)
+    dw     = np.dot(D_inp.T,dout)
+    dx     = dx.reshape(x.shape)
+    print(dx.shape)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -75,7 +84,8 @@ def relu_forward(x):
     ###########################################################################
     # TODO: Implement the ReLU forward pass.                                  #
     ###########################################################################
-    pass
+    y =(x>0).astype(int)
+    out =np.multiply(y,x)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -98,7 +108,9 @@ def relu_backward(dout, cache):
     ###########################################################################
     # TODO: Implement the ReLU backward pass.                                 #
     ###########################################################################
-    pass
+    y =(x>0).astype(int)
+    dx =np.multiply(y,dout)
+    #print(dout.shape,x.shape)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
