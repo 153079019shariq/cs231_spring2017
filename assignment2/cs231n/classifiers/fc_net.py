@@ -6,6 +6,8 @@ from cs231n.layers import *
 from cs231n.layer_utils import *
 
 
+
+
 class TwoLayerNet(object):
     """
     A two-layer fully-connected neural network with ReLU nonlinearity and
@@ -53,7 +55,9 @@ class TwoLayerNet(object):
         self.params['W2'] = np.random.normal(0,weight_scale,(hidden_dim,num_classes))
         self.params['b1'] = np.zeros(hidden_dim)
         self.params['b2'] = np.zeros(num_classes)
-  
+        
+        self.num_layers = 2
+
 
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -84,11 +88,23 @@ class TwoLayerNet(object):
         # TODO: Implement the forward pass for the two-layer net, computing the    #
         # class scores for X and storing them in the scores variable.              #
         ############################################################################
+        '''
         z1,cache_X_w1_b1 = affine_forward(X, self.params['W1'], self.params['b1'])
         #print("z1",z1)
         a1,cache_z1 = relu_forward(z1)
         z2,cache_a1_w2_b2 = affine_forward(a1, self.params['W2'], self.params['b2'])
         scores =z2
+        '''
+        A_prev  = X
+        cache_list   =[]
+        for i in range(1,self.num_layers+1):
+              z,cache1 = affine_forward(A_prev, self.params['W'+str(i)], self.params['b'+str(i)])
+              A,cache2 = relu_forward(z)
+              A_prev   = A
+              cache    = cache1,cache2
+              cache_list.append(cache)
+        scores       =z
+        
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -97,7 +113,8 @@ class TwoLayerNet(object):
         if y is None:
             return scores
 
-        loss, grads = 0, {}
+
+        loss, grads = 0, {} 
         ############################################################################
         # TODO: Implement the backward pass for the two-layer net. Store the loss  #
         # in the loss variable and gradients in the grads dictionary. Compute data #
@@ -108,26 +125,39 @@ class TwoLayerNet(object):
         # automated tests, make sure that your L2 regularization includes a factor #
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
+        ''' 
         X,w1,b1  =cache_X_w1_b1
-        X=        X.reshape(X.shape[0],-1)
+      #  X=        X.reshape(X.shape[0],-1)
         a1,w2,b2 =cache_a1_w2_b2
         loss,dout = softmax_loss(scores,y)
         loss   +=0.5*self.reg *(np.sum(np.multiply(w1,w1))+np.sum(np.multiply(w2,w2)))
-        #print("loss",loss,self.reg)
-        grads['b2'] =np.sum(dout,axis=0)
-        #print(grads['b2'].shape)
-        grads['W2'] =np.dot(a1.T,dout) +self.reg*w2
-        #print(grads['W2'].shape)
-        da1         =np.dot(dout,w2.T)
+        da1,grads['W2'],grads['b2'] =affine_backward(dout, cache_a1_w2_b2) 
         dz_1        =relu_backward(da1,a1)
-        #print(dz_1.shape,b1.shape)
-        grads['b1'] =np.sum(dz_1,axis=0)
-        grads['W1'] =np.dot(X.T,dz_1)  +self.reg*w1
+        _,grads['W1'],grads['b1'] = affine_backward(dz_1,cache_X_w1_b1)
+        
+       # grads['W2']  +=self.reg*w2
+       # grads['W1']  +=self.reg*w1
+        '''
+        loss,dout = softmax_loss(scores,y)
+        for l in reversed(range(self.num_layers)):
+           cache1,cache2 = cache_list[l]
+          # z             = cache2
+          # a_prev,w,b    = cache1
+           a_prev         = cache1[0]
+           w              = cache1[1]
+           #print(l+1,w.shape)
+           loss   +=0.5*self.reg *(np.sum(np.multiply(w,w)))
+           da1,grads['W'+str(l+1)],grads['b'+str(l+1)] =affine_backward(dout, cache1)
+           grads['W'+str(l+1)] +=self.reg*w
+           dz_1          =relu_backward(da1,a_prev)
+           dout          =dz_1
+       # print("Loss",loss)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
 
         return loss, grads
+
 
 
 class FullyConnectedNet(object):
@@ -188,7 +218,15 @@ class FullyConnectedNet(object):
         # beta2, etc. Scale parameters should be initialized to one and shift      #
         # parameters should be initialized to zero.                                #
         ############################################################################
-        pass
+        hidden_dims.insert(0,input_dim)
+        for i in range(1,len(hidden_dims)):
+             #print(i)
+             self.params['W'+str(i)] = np.random.normal(0,weight_scale,(hidden_dims[i-1], hidden_dims[i]))
+             self.params['b'+str(i)] = np.zeros(hidden_dims[i])
+        self.params['W'+str(i+1)] = np.random.normal(0,weight_scale,(hidden_dims[i], num_classes))
+        self.params['b'+str(i+1)] = np.zeros(num_classes)
+
+        
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -213,7 +251,10 @@ class FullyConnectedNet(object):
 
         # Cast all parameters to the correct datatype
         for k, v in self.params.items():
+            #print(k)
             self.params[k] = v.astype(dtype)
+
+
 
 
     def loss(self, X, y=None):
@@ -246,7 +287,18 @@ class FullyConnectedNet(object):
         # self.bn_params[1] to the forward pass for the second batch normalization #
         # layer, etc.                                                              #
         ############################################################################
-        pass
+    
+
+        A_prev  = X
+        cache_list   =[]
+        for i in range(1,self.num_layers+1):
+              z,cache1 = affine_forward(A_prev, self.params['W'+str(i)], self.params['b'+str(i)])
+              A,cache2 = relu_forward(z)
+              A_prev   = A
+              cache    = cache1,cache2
+              cache_list.append(cache)
+        scores       =z      
+        #print("OUTPUT SHAPE",scores.shape)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -256,6 +308,8 @@ class FullyConnectedNet(object):
             return scores
 
         loss, grads = 0.0, {}
+         
+
         ############################################################################
         # TODO: Implement the backward pass for the fully-connected net. Store the #
         # loss in the loss variable and gradients in the grads dictionary. Compute #
@@ -269,9 +323,26 @@ class FullyConnectedNet(object):
         # automated tests, make sure that your L2 regularization includes a factor #
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
-        pass
-        ############################################################################
+       
+        loss,dout = softmax_loss(scores,y)
+
+        for l in reversed(range(self.num_layers)):
+           cache1,cache2 = cache_list[l]
+          # z             = cache2
+          # a_prev,w,b    = cache1
+           a_prev         = cache1[0]
+           w              = cache1[1]
+           loss   +=0.5*self.reg *(np.sum(np.multiply(w,w)))
+           da1,grads['W'+str(l+1)],grads['b'+str(l+1)] =affine_backward(dout, cache1)
+           grads['W'+str(l+1)] +=self.reg*w
+           dz_1          =relu_backward(da1,a_prev)
+           dout          =dz_1
+
+
+  
+         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
+         
 
         return loss, grads
