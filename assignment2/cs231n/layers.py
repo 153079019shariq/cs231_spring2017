@@ -55,14 +55,10 @@ def affine_backward(dout, cache):
     ###########################################################################
     # TODO: Implement the affine backward pass.                               #
     ###########################################################################
-    print(x.shape,w.shape,b.shape)
-    #print(dx.shape,dw.shape,db.shape)
-    print(dout.shape)
     dx     = np.dot(dout,w.T)
     db     = np.sum(dout,axis=0)
-    dw     = np.dot(D_inp.T,dout)
+    dw     = np.dot(D_inp.T,dout) 
     dx     = dx.reshape(x.shape)
-    print(dx.shape)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -84,6 +80,7 @@ def relu_forward(x):
     ###########################################################################
     # TODO: Implement the ReLU forward pass.                                  #
     ###########################################################################
+    #print(x)
     y =(x>0).astype(int)
     out =np.multiply(y,x)
     ###########################################################################
