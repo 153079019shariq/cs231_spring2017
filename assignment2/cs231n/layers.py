@@ -1,6 +1,58 @@
 from builtins import range
 import numpy as np
 
+def get_im2col_indices(x_shape, field_height, field_width, padding=1, stride=1):
+    # First figure out what the size of the output should be
+    N, C, H, W = x_shape
+    assert (H + 2 * padding - field_height) % stride == 0
+    assert (W + 2 * padding - field_height) % stride == 0
+    out_height = (H + 2 * padding - field_height) // stride + 1
+    out_width = (W + 2 * padding - field_width) // stride + 1
+
+    i0 = np.repeat(np.arange(field_height), field_width)
+    i0 = np.tile(i0, C)
+    i1 = stride * np.repeat(np.arange(out_height), out_width)
+    j0 = np.tile(np.arange(field_width), field_height * C)
+    j1 = stride * np.tile(np.arange(out_width), out_height)
+    i = i0.reshape(-1, 1) + i1.reshape(1, -1)
+    j = j0.reshape(-1, 1) + j1.reshape(1, -1)
+
+    k = np.repeat(np.arange(C), field_height * field_width).reshape(-1, 1)
+
+    return (k, i, j)
+
+
+def im2col_indices(x, field_height, field_width, padding=1, stride=1):
+    """ An implementation of im2col based on some fancy indexing """
+    # Zero-pad the input
+    p = padding
+    x_padded = np.pad(x, ((0, 0), (0, 0), (p, p), (p, p)), mode='constant')
+
+    k, i, j = get_im2col_indices(x.shape, field_height, field_width, padding,
+                                 stride)
+
+    cols = x_padded[:, k, i, j]
+    C = x.shape[1]
+    cols = cols.transpose(1, 2, 0).reshape(field_height * field_width * C, -1)
+    return cols
+
+
+def col2im_indices(cols, x_shape, field_height=3, field_width=3, padding=1,
+                   stride=1):
+    """ An implementation of col2im based on fancy indexing and np.add.at """
+    N, C, H, W = x_shape
+    H_padded, W_padded = H + 2 * padding, W + 2 * padding
+    x_padded = np.zeros((N, C, H_padded, W_padded), dtype=cols.dtype)
+    k, i, j = get_im2col_indices(x_shape, field_height, field_width, padding,
+                                 stride)
+    cols_reshaped = cols.reshape(C * field_height * field_width, -1, N)
+    cols_reshaped = cols_reshaped.transpose(2, 0, 1)
+    np.add.at(x_padded, (slice(None), k, i, j), cols_reshaped)
+    if padding == 0:
+        return x_padded
+    return x_padded[:, :, padding:-padding, padding:-padding]
+
+
 
 def affine_forward(x, w, b):
     """
@@ -378,16 +430,40 @@ def conv_forward_naive(x, w, b, conv_param):
       W' = 1 + (W + 2 * pad - WW) / stride
     - cache: (x, w, b, conv_param)
     """
-    out = None
+    
     ###########################################################################
     # TODO: Implement the convolutional forward pass.                         #
     # Hint: you can use the function np.pad for padding.                      #
     ###########################################################################
-    pass
+    field_height = w.shape[2]
+    field_width  = w.shape[3]
+    no_of_filter = w.shape[0]
+    pad          = conv_param['pad']
+    stride       = conv_param['stride']
+    N            = x.shape[0]
+    H            = x.shape[2]
+    W            = x.shape[3]
+    x_pad = np.pad(x,((0,),(0,),(pad,),(pad,)),'constant',constant_values=0);
+    #print(x_pad.shape)
+    #print("Input height width no_of_channel batch_size",x.shape[2],x.shape[3],x.shape[1],x.shape[0])
+    #print("Filer height width no_f_filter",field_height,field_width,no_of_filter)
+    #print("padding stride",conv_param['pad'] ,conv_param['stride'] )
+    #print("out_shape Height Width",H,W)
+    #print("X",x.shape)
+    H_out  = (H+ 2*pad - field_height)//(stride) +1
+    W_out  = (W+ 2*pad - field_width)//(stride) +1
+    out    =np.zeros((N,no_of_filter,H_out,W_out))
+    for i in range(H_out):
+      for j in range(W_out):
+        for filter_no  in range(no_of_filter):
+          #Here we have already done paddinhg on the x and get x_pad so that why we do not substract 2*p whileslicing x_pad
+          out[:,filter_no,i,j]  = np.sum(x_pad[:,:,i*stride:i*stride+field_height,j*stride:j*stride+field_width]*w[filter_no,:,:,:],axis=(1,2,3)) +b[filter_no]
+    
+    
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
-    cache = (x, w, b, conv_param)
+    cache = (x_pad, w, b, conv_param)
     return out, cache
 
 
@@ -408,7 +484,39 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
-    pass
+    x,w,b,conv_param= cache
+    H_out         = dout.shape[2]
+    W_out         = dout.shape[3]
+    no_of_fil     = dout.shape[1]
+    no_of_channel = x.shape[1]
+    field_height  = w.shape[2]
+    field_width   = w.shape[3]
+    stride        = conv_param['stride']
+    pad           = conv_param['pad']
+    H             = x.shape[2]
+    W             = x.shape[3]
+    print("filter height width",field_height,field_width);
+    print("H_out W_out",H_out,W_out)
+    print("dout_shape",dout.shape)
+    print("x_shape",x.shape)
+    print(no_of_fil,no_of_channel)
+    #Already padding was done(conv_forward_naive) so we do not consider it here
+    dw =np.zeros((no_of_fil,no_of_channel,field_height,field_width))       
+    for filter_no in range(no_of_fil):
+     for channel_no in range(no_of_channel):
+       for i in range(field_height):
+        for j in range(field_width):  
+            dw[filter_no,channel_no,i,j] = np.sum(x[:,channel_no,i:(H_out)*stride+i,j:(W_out)*stride+j] * dout[:,filter_no,:,:])
+    print(  dw.shape)
+    
+    
+    db =np.zeros((no_of_fil))
+    for filter_no in range(no_of_fil):
+      db[filter_no] = np.sum(dout[:,filter_no,:,:])
+
+
+
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -584,3 +692,8 @@ def softmax_loss(x, y):
     dx[np.arange(N), y] -= 1
     dx /= N
     return loss, dx
+
+
+
+
+
