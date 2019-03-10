@@ -456,7 +456,7 @@ def conv_backward_naive(dout, cache):
       for i in range(field_height):
        for j in range(field_width):
            #print(np.sum(x[:,channel_no,i*stride:i*stride+H_out,j*stride:j*stride+W_out] * dout[:,filter_no,:,:]))
-           dw[filter_no,channel_no,i,j] += np.sum(x[:,channel_no,i*stride:i*stride+H_out,j*stride:j*stride+W_out] * dout[:,filter_no,:,:])
+           dw[filter_no,channel_no,i,j] = np.sum(x[:,channel_no,i*stride:i*stride+H_out,j*stride:j*stride+W_out] * dout[:,filter_no,:,:])
     
     
     db =np.zeros((no_of_fil))
