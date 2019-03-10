@@ -1,57 +1,6 @@
 from builtins import range
 import numpy as np
 
-def get_im2col_indices(x_shape, field_height, field_width, padding=1, stride=1):
-    # First figure out what the size of the output should be
-    N, C, H, W = x_shape
-    assert (H + 2 * padding - field_height) % stride == 0
-    assert (W + 2 * padding - field_height) % stride == 0
-    out_height = (H + 2 * padding - field_height) // stride + 1
-    out_width = (W + 2 * padding - field_width) // stride + 1
-
-    i0 = np.repeat(np.arange(field_height), field_width)
-    i0 = np.tile(i0, C)
-    i1 = stride * np.repeat(np.arange(out_height), out_width)
-    j0 = np.tile(np.arange(field_width), field_height * C)
-    j1 = stride * np.tile(np.arange(out_width), out_height)
-    i = i0.reshape(-1, 1) + i1.reshape(1, -1)
-    j = j0.reshape(-1, 1) + j1.reshape(1, -1)
-
-    k = np.repeat(np.arange(C), field_height * field_width).reshape(-1, 1)
-
-    return (k, i, j)
-
-
-def im2col_indices(x, field_height, field_width, padding=1, stride=1):
-    """ An implementation of im2col based on some fancy indexing """
-    # Zero-pad the input
-    p = padding
-    x_padded = np.pad(x, ((0, 0), (0, 0), (p, p), (p, p)), mode='constant')
-
-    k, i, j = get_im2col_indices(x.shape, field_height, field_width, padding,
-                                 stride)
-
-    cols = x_padded[:, k, i, j]
-    C = x.shape[1]
-    cols = cols.transpose(1, 2, 0).reshape(field_height * field_width * C, -1)
-    return cols
-
-
-def col2im_indices(cols, x_shape, field_height=3, field_width=3, padding=1,
-                   stride=1):
-    """ An implementation of col2im based on fancy indexing and np.add.at """
-    N, C, H, W = x_shape
-    H_padded, W_padded = H + 2 * padding, W + 2 * padding
-    x_padded = np.zeros((N, C, H_padded, W_padded), dtype=cols.dtype)
-    k, i, j = get_im2col_indices(x_shape, field_height, field_width, padding,
-                                 stride)
-    cols_reshaped = cols.reshape(C * field_height * field_width, -1, N)
-    cols_reshaped = cols_reshaped.transpose(2, 0, 1)
-    np.add.at(x_padded, (slice(None), k, i, j), cols_reshaped)
-    if padding == 0:
-        return x_padded
-    return x_padded[:, :, padding:-padding, padding:-padding]
-
 
 
 def affine_forward(x, w, b):
@@ -504,10 +453,10 @@ def conv_backward_naive(dout, cache):
     dw =np.zeros((no_of_fil,no_of_channel,field_height,field_width))       
     for filter_no in range(no_of_fil):
      for channel_no in range(no_of_channel):
-       for i in range(field_height):
-        for j in range(field_width):  
-            dw[filter_no,channel_no,i,j] = np.sum(x[:,channel_no,i:(H_out)*stride+i,j:(W_out)*stride+j] * dout[:,filter_no,:,:])
-    print(  dw.shape)
+      for i in range(field_height):
+       for j in range(field_width):
+           #print(np.sum(x[:,channel_no,i*stride:i*stride+H_out,j*stride:j*stride+W_out] * dout[:,filter_no,:,:]))
+           dw[filter_no,channel_no,i,j] += np.sum(x[:,channel_no,i*stride:i*stride+H_out,j*stride:j*stride+W_out] * dout[:,filter_no,:,:])
     
     
     db =np.zeros((no_of_fil))
@@ -515,7 +464,10 @@ def conv_backward_naive(dout, cache):
       db[filter_no] = np.sum(dout[:,filter_no,:,:])
 
 
-
+#    - x: Input data of shape (N, C, H, W)
+#    - w: Filter weights of shape (F, C, HH, WW)
+#    - out: Output data, of shape (N, F, H, W) where H' and W' are given by
+       
 
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -538,11 +490,25 @@ def max_pool_forward_naive(x, pool_param):
     - out: Output data
     - cache: (x, pool_param)
     """
+    pool_height = pool_param['pool_height']
+    pool_width  = pool_param['pool_width']
+    stride      = pool_param['stride']
+    N,C,H,W     = x.shape
+    #print("N C H W",N,C,H,W)
     out = None
     ###########################################################################
     # TODO: Implement the max pooling forward pass                            #
     ###########################################################################
-    pass
+    #There is no padding in max pool layer
+    H_out  = (H  - pool_height)//(stride) +1
+    W_out  = (W - pool_width)//(stride) +1
+    out    =np.zeros((N,C,H_out,W_out))
+    for i in range(H_out):
+      for j in range(W_out):
+          out[:,:,i,j]  = np.max(x[:,:,i*stride:i*stride+pool_height,j*stride:j*stride+pool_width],axis=(2,3)) 
+          #print(out[:,:,i,j])
+
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -562,10 +528,28 @@ def max_pool_backward_naive(dout, cache):
     - dx: Gradient with respect to x
     """
     dx = None
+    x,pool_param= cache
+    pool_height = pool_param['pool_height']
+    pool_width  = pool_param['pool_width']
+    stride      = pool_param['stride']
+    N,C,H,W     = x.shape
+    H_out       = dout.shape[2]
+    W_out       = dout.shape[3]
+    out         = np.zeros((dout.shape))
+    dx          = np.zeros((x.shape))
+    print("N C H W",N,C,H,W)
+    print("H_out W_out",H_out,W_out)
     ###########################################################################
     # TODO: Implement the max pooling backward pass                           #
     ###########################################################################
-    pass
+    for no in range(N): 
+      for no_of_channel in range(C):
+        for i in range(H_out):
+          for j in range(W_out):
+            temp = x[no,no_of_channel,i*stride:i*stride+pool_height,j*stride:j*stride+pool_width]
+            h,w = np.unravel_index(temp.argmax(), temp.shape)
+            dx[no,no_of_channel,i*stride+h,j*stride+w]  = dout[no,no_of_channel,i,j]
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
